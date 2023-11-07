@@ -21,7 +21,7 @@ from ultralytics.utils import (DATASETS_DIR, LOGGER, NUM_THREADS, ROOT, SETTINGS
                                emojis, yaml_load)
 from ultralytics.utils.checks import check_file, check_font, is_ascii
 from ultralytics.utils.downloads import download, safe_download, unzip_file
-from ultralytics.utils.ops import segments2boxes
+from ultralytics.utils.ops import segments2boxes, xyxy2xywh
 
 HELP_URL = 'See https://docs.ultralytics.com/datasets/detect for dataset formatting guidance.'
 IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # image suffixes
@@ -55,6 +55,13 @@ def exif_size(img: Image.Image):
                     s = s[1], s[0]
     return s
 
+
+def get_obj_sizes(img, bboxes):
+    img_size = img.shape[0] * img.shape[1]
+    bboxes = xyxy2xywh(bboxes)
+
+    w,h = bboxes[:,2], bboxes[:,3]
+    return w * h / img_size
 
 def verify_image(args):
     """Verify one image."""

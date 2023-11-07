@@ -15,7 +15,7 @@ from ultralytics.utils.instance import Instances
 from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box
 
-from .utils import polygons2masks, polygons2masks_overlap
+from .utils import polygons2masks, polygons2masks_overlap, get_obj_sizes
 
 
 # TODO: we might need a BaseTransform to make all these augments be compatible with both classification and semantic
@@ -301,7 +301,6 @@ class MixUp(BaseMixTransform):
         labels['cls'] = np.concatenate([labels['cls'], labels2['cls']], 0)
         return labels
 
-
 class RandomPerspective:
     """
     Implements random perspective and affine transformations on images and corresponding bounding boxes, segments, and
@@ -332,8 +331,15 @@ class RandomPerspective:
                  scale=0.5,
                  shear=0.0,
                  perspective=0.0,
+                 p_degrees=0.0,
+                 p_translate=0.0,
+                 p_scale=0.0,
+                 p_shear=0.0,
+                 p_perspective=0.0,
+                 obj_size=0.05,
                  border=(0, 0),
-                 pre_transform=None):
+                 pre_transform=None
+                ):
         """Initializes RandomPerspective object with transformation parameters."""
 
         self.degrees = degrees
@@ -341,10 +347,18 @@ class RandomPerspective:
         self.scale = scale
         self.shear = shear
         self.perspective = perspective
+        self.p_degrees = p_degrees
+        self.p_translate = p_translate
+        self.p_scale = p_scale
+        self.p_shear = p_shear
+        self.p_perspective = p_perspective
+        self.obj_size = obj_size
         self.border = border  # mosaic border
         self.pre_transform = pre_transform
 
-    def affine_transform(self, img, border):
+        self._perspective=0.0
+
+    def affine_transform(self, img, border, bboxes):
         """
         Applies a sequence of affine transformations centered around the image center.
 
@@ -358,6 +372,22 @@ class RandomPerspective:
             s (float): Scale factor.
         """
 
+        def _configure_transform(v, p):
+            if applicable | (random.uniform(0,1) <= p):
+                return v
+            return 0.0
+
+        obj_sizes = get_obj_sizes(img, bboxes).flatten()
+        applicable = np.all((obj_sizes >= self.obj_size))
+
+        degrees = _configure_transform(self.degrees, self.p_degrees)
+        translate = _configure_transform(self.translate, self.p_translate)
+        scale = _configure_transform(self.scale, self.p_scale)
+        shear = _configure_transform(self.shear, -1)
+        perspective = _configure_transform(self.perspective, -1)
+
+        self._perspective = perspective
+
         # Center
         C = np.eye(3, dtype=np.float32)
 
@@ -366,32 +396,32 @@ class RandomPerspective:
 
         # Perspective
         P = np.eye(3, dtype=np.float32)
-        P[2, 0] = random.uniform(-self.perspective, self.perspective)  # x perspective (about y)
-        P[2, 1] = random.uniform(-self.perspective, self.perspective)  # y perspective (about x)
+        P[2, 0] = random.uniform(-perspective, perspective)  # x perspective (about y)
+        P[2, 1] = random.uniform(-perspective, perspective)  # y perspective (about x)
 
         # Rotation and Scale
         R = np.eye(3, dtype=np.float32)
-        a = random.uniform(-self.degrees, self.degrees)
+        a = random.uniform(-degrees, degrees)
         # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
-        s = random.uniform(1 - self.scale, 1 + self.scale)
+        s = random.uniform(1 - scale, 1 + scale)
         # s = 2 ** random.uniform(-scale, scale)
         R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
 
         # Shear
         S = np.eye(3, dtype=np.float32)
-        S[0, 1] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # x shear (deg)
-        S[1, 0] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # y shear (deg)
+        S[0, 1] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # x shear (deg)
+        S[1, 0] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # y shear (deg)
 
         # Translation
         T = np.eye(3, dtype=np.float32)
-        T[0, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[0]  # x translation (pixels)
-        T[1, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[1]  # y translation (pixels)
+        T[0, 2] = random.uniform(0.5 - translate, 0.5 + translate) * self.size[0]  # x translation (pixels)
+        T[1, 2] = random.uniform(0.5 - translate, 0.5 + translate) * self.size[1]  # y translation (pixels)
 
         # Combined rotation matrix
         M = T @ S @ R @ P @ C  # order of operations (right to left) is IMPORTANT
         # Affine image
         if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
-            if self.perspective:
+            if perspective:
                 img = cv2.warpPerspective(img, M, dsize=self.size, borderValue=(114, 114, 114))
             else:  # affine
                 img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(114, 114, 114))
@@ -415,7 +445,7 @@ class RandomPerspective:
         xy = np.ones((n * 4, 3), dtype=bboxes.dtype)
         xy[:, :2] = bboxes[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
         xy = xy @ M.T  # transform
-        xy = (xy[:, :2] / xy[:, 2:3] if self.perspective else xy[:, :2]).reshape(n, 8)  # perspective rescale or affine
+        xy = (xy[:, :2] / xy[:, 2:3] if self._perspective else xy[:, :2]).reshape(n, 8)  # perspective rescale or affine
 
         # Create new boxes
         x = xy[:, [0, 2, 4, 6]]
@@ -926,6 +956,10 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
             scale=hyp.scale,
             shear=hyp.shear,
             perspective=hyp.perspective,
+            p_degrees=hyp.p_degrees,
+            p_translate=hyp.p_translate,
+            p_scale=hyp.p_scale,
+            obj_size=hyp.obj_size,
             pre_transform=None if stretch else LetterBox(new_shape=(imgsz, imgsz)),
         )])
     flip_idx = dataset.data.get('flip_idx', [])  # for keypoints augmentation
