@@ -107,6 +107,9 @@ p_scale: 0.2 # (float) image scale probability
 shear: 0.0  # (float) image shear (+/- deg)
 perspective: 0.0  # (float) image perspective (+/- fraction), range 0-0.001
 obj_size: 0.05 # (float) minimum object size for augmentation
+swap: 0.1 # (float) probability of BoxRandomSwap augmentation
+background_intensity: 0.4 # (float) augmentation intensity range 0-1
+instance_similarity: 0.3 # (float) postprocessing threshold for removing excess augmentations range 0-1
 flipud: 0.0  # (float) image flip up-down (probability)
 fliplr: 0.5  # (float) image flip left-right (probability)
 mosaic: 1.0  # (float) image mosaic (probability)

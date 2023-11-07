@@ -1,5 +1,10 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
+
+import skimage.exposure
+from numpy.random import default_rng
+import pandas
+
 import math
 import random
 from copy import deepcopy
@@ -8,6 +13,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
+
 
 from ultralytics.utils import LOGGER, colorstr
 from ultralytics.utils.checks import check_version
@@ -301,6 +307,7 @@ class MixUp(BaseMixTransform):
         labels['cls'] = np.concatenate([labels['cls'], labels2['cls']], 0)
         return labels
 
+
 class RandomPerspective:
     """
     Implements random perspective and affine transformations on images and corresponding bounding boxes, segments, and
@@ -427,6 +434,7 @@ class RandomPerspective:
                 img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(114, 114, 114))
         return img, M, s
 
+
     def apply_bboxes(self, bboxes, M):
         """
         Apply affine to bboxes only.
@@ -522,7 +530,7 @@ class RandomPerspective:
         self.size = img.shape[1] + border[1] * 2, img.shape[0] + border[0] * 2  # w, h
         # M is affine matrix
         # Scale for func:`box_candidates`
-        img, M, scale = self.affine_transform(img, border)
+        img, M, scale = self.affine_transform(img, border, instances.bboxes)
 
         bboxes = self.apply_bboxes(instances.bboxes, M)
 
@@ -973,6 +981,12 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
 
     return Compose([
         pre_transform,
+        BoxRandomSwap(
+            dataset,
+            hyp.swap,
+            hyp.instance_similarity,
+            hyp.background_intensity
+        ),
         MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
         Albumentations(p=1.0),
         RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
@@ -1139,3 +1153,100 @@ class ToTensor:
         im = im.half() if self.half else im.float()  # uint8 to fp16/32
         im /= 255.0  # 0-255 to 0.0-1.0
         return im
+
+class BoxRandomSwap:
+  def __init__(self,dataset,p=0.1,instance_similarity=0.3,background_intensity=0.4):
+    self.dataset = dataset
+    self.instance_similarity = instance_similarity
+    self.background_intensity = background_intensity
+    self.p = p
+    background_series = pandas.Series([bool(label['cls'].tolist()) for label in self.dataset.get_labels()])
+    self.background_indices = background_series[background_series == True].index
+  def get_random_background(self):
+    random_index = random.choice(self.background_indices)
+    random_label = self.dataset.get_image_and_label(random_index)
+    return random_label['img']
+  def overlap_instance(self,instance):
+    height, width = instance.shape[:2]
+
+    # define random seed to change the pattern
+    rng = default_rng()
+
+    # create random noise image
+    noise = rng.integers(0, 255, (height,width), np.uint8, True)
+    background = self.get_random_background()
+    resized_background = cv2.resize(background, (width,height), interpolation = cv2.INTER_AREA)
+    # blur the noise image to control the size
+    blur = cv2.GaussianBlur(noise, (0,0), sigmaX=15, sigmaY=15, borderType = cv2.BORDER_DEFAULT)
+
+    # stretch the blurred image to full dynamic range
+    stretch = skimage.exposure.rescale_intensity(blur, in_range='image', out_range=(0,255)).astype(np.uint8)
+
+    # threshold stretched image to control the size
+    thresh = cv2.threshold(stretch, 255-255*self.background_intensity, 255, cv2.THRESH_BINARY)[1]
+
+    # apply morphology open and close to smooth out and make 3 channels
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9,9))
+    mask = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.merge([mask,mask,mask])
+
+    # add mask to input
+    masked_instance = cv2.add(instance, mask)
+
+    # use canny edge detection on mask
+    edges = cv2.Canny(mask,50,255)
+
+    # thicken edges and make 3 channel
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_DILATE, kernel)
+    edges = cv2.merge([edges,edges,edges])
+
+    # merge edges with result1 (make black in result where edges are white)
+    edged_instance = masked_instance.copy()
+    edged_instance[np.where((edges == [255,255,255]).all(axis=2))] = [0,0,0]
+
+    # add noise to result where mask is white
+    noise = cv2.merge([noise,noise,noise])
+    overlapped_instance = edged_instance.copy()
+    overlapped_instance = np.where(mask==(255,255,255), resized_background, overlapped_instance)
+
+    # save result
+    return overlapped_instance
+
+  def get_instance_edges(self,x,y,w,h):
+    x1 = x-w/2
+    x2 = x+w/2
+    y1 = y-h/2
+    y2 = y+h/2
+    return int(x1),int(x2),int(y1),int(y2)
+
+  def measure_img_similarity(self,instance,overlapped_instance):
+    width = instance.shape[1]
+    height = instance.shape[0]
+    matched_pixels = np.sum(instance == overlapped_instance)
+    similarity = matched_pixels/(width*height)
+    return similarity
+
+
+  def __call__(self,labels):
+    if random.uniform(0, 1) <= self.p:
+      img = labels['img']
+      bboxes = labels['instances'].bboxes
+      #height,width = labels['resized_shape']
+
+      for instance in bboxes:
+        x1,y1,x2,y2 = instance
+        x1 = math.floor(x1)
+        y1 = math.floor(y1)
+        x2 = math.floor(x2)
+        y2 = math.floor(y2)
+
+        # x1,x2,y1,y2 = self.get_instance_edges(x,y,w,h)
+        initial_instance = img[y1:y2,x1:x2]
+        overlapped_instance = self.overlap_instance(img[y1:y2,x1:x2])
+        similarity = self.measure_img_similarity(initial_instance,overlapped_instance)
+        if similarity >= self.instance_similarity:
+          img[y1:y2,x1:x2] = overlapped_instance
+      labels['img'] = img
+    return labels
