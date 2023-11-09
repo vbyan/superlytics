@@ -100,16 +100,17 @@ hsv_s: 0.7  # (float) image HSV-Saturation augmentation (fraction)
 hsv_v: 0.4  # (float) image HSV-Value augmentation (fraction)
 degrees: 0.0  # (float) image rotation (+/- deg)
 p_degrees: 0.0 # (float) image rotation probability
-translate: 0.1  # (float) image translation (+/- fraction)
+translate: 0.3  # (float) image translation (+/- fraction)
 p_translate: 0.2 # (float) image translation probability
-scale: 0.5  # (float) image scale (+/- gain)
+scale: 0.3  # (float) image scale (+/- gain)
 p_scale: 0.2 # (float) image scale probability
 shear: 0.0  # (float) image shear (+/- deg)
 perspective: 0.0  # (float) image perspective (+/- fraction), range 0-0.001
-obj_size: 0.05 # (float) minimum object size for augmentation
-swap: 0.1 # (float) probability of BoxRandomSwap augmentation
-background_intensity: 0.4 # (float) augmentation intensity range 0-1
-instance_similarity: 0.3 # (float) postprocessing threshold for removing excess augmentations range 0-1
+obj_size: 0.05 # (float) minimum object size for random perspective augmentation
+tear: 0.2 # (float) probability of tear augmentation
+background_intensity: 0.7 # (float) augmentation intensity range 0-1
+instance_similarity: 0.7 # (float) threshold for removing excess tear range 0-1
+axis_factor: 0.5 # (float) horizontal-vertical ratio for tear augmentation range 0-1
 flipud: 0.0  # (float) image flip up-down (probability)
 fliplr: 0.5  # (float) image flip left-right (probability)
 mosaic: 1.0  # (float) image mosaic (probability)
