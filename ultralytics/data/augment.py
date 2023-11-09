@@ -1204,8 +1204,13 @@ class RandomTear:
         return _range_correct(sigmaX), _range_correct(sigmaY)
 
     def apply_tear(self, img, bbox):
+        bbox = bbox.astype('int32')
+        x1, y1, x2, y2 = bbox
+
+        instance = img[y1:y2, x1:x2]
+
         if not random.uniform(0, 1) <= self.p:
-            return bbox
+            return instance, bbox
 
         bbox = bbox.astype('int32')
         x1, y1, x2, y2 = bbox
@@ -1270,7 +1275,6 @@ class RandomTear:
         x1, y1, x2, y2 = bbox
         instance_similarity = self.measure_img_similarity(img[y1:y2, x1:x2], torn_instance)
         if instance_similarity <= self.instance_similarity:
-            print('Removed')
             self.img[y1:y2, x1:x2] = img[y1:y2, x1:x2]
 
     def __call__(self, label):
