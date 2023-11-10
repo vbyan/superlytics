@@ -823,7 +823,7 @@ class Albumentations:
     compression.
     """
 
-    def __init__(self, p=1.0):
+    def __init__(self, p=0.05):
         """Initialize the transform object for YOLO bbox formatted params."""
         self.p = p
         self.transform = None
@@ -831,15 +831,16 @@ class Albumentations:
         try:
             import albumentations as A
 
-            check_version(A.__version__, '1.0.3', hard=True)  # version requirement
+            #check_version(A.__version__, '1.0.3', hard=True)  # version requirement
 
             T = [
-                A.Blur(p=0.01),
-                A.MedianBlur(p=0.01),
-                A.ToGray(p=0.01),
-                A.CLAHE(p=0.01),
-                A.RandomBrightnessContrast(p=0.0),
-                A.RandomGamma(p=0.0),
+                A.Blur(p=self.p),
+                A.MedianBlur(p=self.p),
+                A.ToGray(p=self.p),
+                A.CLAHE(p=self.p),
+                A.RandomBrightnessContrast(p=self.p),
+                A.RandomGamma(p=self.p),
+                A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
                 A.ImageCompression(quality_lower=75, p=0.0)]  # transforms
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
 
@@ -858,7 +859,7 @@ class Albumentations:
             labels['instances'].normalize(*im.shape[:2][::-1])
             bboxes = labels['instances'].bboxes
             # TODO: add supports of segments and keypoints
-            if self.transform and random.random() < self.p:
+            if self.transform:
                 new = self.transform(image=im, bboxes=bboxes, class_labels=cls)  # transformed
                 if len(new['class_labels']) > 0:  # skip update if no bbox in new im
                     labels['img'] = new['image']
@@ -989,7 +990,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
             hyp.axis_factor
         ),
         MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
-        Albumentations(p=1.0),
+        Albumentations(p=hyp.albumentations),
         RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
         RandomFlip(direction='vertical', p=hyp.flipud),
         RandomFlip(direction='horizontal', p=hyp.fliplr, flip_idx=flip_idx)])  # transforms
