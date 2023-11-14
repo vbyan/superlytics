@@ -1,10 +1,8 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-from joblib import Parallel, delayed
+
 import skimage.exposure
 from numpy.random import default_rng
-from shapely.geometry import box
-from itertools import combinations
 import pandas
 
 import math
@@ -1280,12 +1278,6 @@ class RandomTear:
         if instance_similarity <= self.instance_similarity:
             self.img[y1:y2, x1:x2] = img[y1:y2, x1:x2]
 
-    @staticmethod
-    def get_overlaps(bboxes):
-        pairs = combinations(range(len(bboxes)),2)
-        overlapping_indices = {i for i, j in pairs if box(*bboxes[i]).intersects(box(*bboxes[j]))}
-        return overlapping_indices
-
     def __call__(self, label):
         if label['cls'].size == 0:
             return label
@@ -1293,11 +1285,8 @@ class RandomTear:
         bboxes = label['instances'].bboxes
 
         self.img = img.copy()
-
         torn_instances, bboxes = list(zip(*[self.apply_tear(self.img,bbox) for bbox in bboxes]))
-        overlapping_indices = self.get_overlaps(bboxes)
-        [self.check_distortion(img, torn_instance, bbox) for i, torn_instance, bbox in zip(range(len(bboxes)), torn_instances, bboxes)
-                                                                      if i in overlapping_indices]
+        [self.check_distortion(img, torn_instance, bbox) for torn_instance, bbox in zip(torn_instances, bboxes)]
 
         label['img'] = self.img
         return label
