@@ -841,6 +841,7 @@ class Albumentations:
                 A.RandomBrightnessContrast(p=self.p),
                 A.RandomGamma(p=self.p),
                 A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
+                A.MotionBlur(p=2*self.p, blur_limit=(11,19)),
                 A.ImageCompression(quality_lower=75, p=0.0)]  # transforms
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
 
