@@ -839,7 +839,7 @@ class Albumentations:
                 A.RandomBrightnessContrast(p=0.5),
                 A.RandomGamma(p=0.5),
                 A.RandomRain(p=0.5, brightness_coefficient=0.9, blur_value=4),
-                A.MotionBlur(p=1, blur_limit=(11, 19))], p=10*self.p)]
+                A.MotionBlur(p=1, blur_limit=(11, 19))], p=2*self.p)]
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
 
             LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
