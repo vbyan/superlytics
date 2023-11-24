@@ -824,10 +824,11 @@ class Albumentations:
     compression.
     """
 
-    def __init__(self, p=0.05):
+    def __init__(self, p=0.05, obj_size=0.05):
         """Initialize the transform object for YOLO bbox formatted params."""
         self.p = p
         self.transform = None
+        self.obj_size=obj_size
         prefix = colorstr('albumentations: ')
 
         T_blur = [A.Blur(p=1, blur_limit=(11, 19)),
@@ -847,18 +848,23 @@ class Albumentations:
         """Generates object detections and returns a dictionary with detection results."""
         im = labels['img']
         cls = labels['cls']
-        if len(cls):
-            labels['instances'].convert_bbox('xywh')
-            labels['instances'].normalize(*im.shape[:2][::-1])
-            bboxes = labels['instances'].bboxes
-            # TODO: add supports of segments and keypoints
-            if self.transform:
-                new = self.transform(image=im, bboxes=bboxes, class_labels=cls)  # transformed
-                if len(new['class_labels']) > 0:  # skip update if no bbox in new im
-                    labels['img'] = new['image']
-                    labels['cls'] = np.array(new['class_labels'])
-                    bboxes = np.array(new['bboxes'], dtype=np.float32)
-            labels['instances'].update(bboxes=bboxes)
+        bboxes = labels['instances'].bboxes
+
+        obj_sizes = get_obj_sizes(im, bboxes).flatten()
+        applicable = np.all((obj_sizes >= self.obj_size))
+        if applicable:
+            if len(cls):
+                labels['instances'].convert_bbox('xywh')
+                labels['instances'].normalize(*im.shape[:2][::-1])
+                bboxes = labels['instances'].bboxes
+                # TODO: add supports of segments and keypoints
+                if self.transform:
+                    new = self.transform(image=im, bboxes=bboxes, class_labels=cls)  # transformed
+                    if len(new['class_labels']) > 0:  # skip update if no bbox in new im
+                        labels['img'] = new['image']
+                        labels['cls'] = np.array(new['class_labels'])
+                        bboxes = np.array(new['bboxes'], dtype=np.float32)
+                labels['instances'].update(bboxes=bboxes)
         return labels
 
 
@@ -983,7 +989,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
             hyp.axis_factor
         ),
         MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
-        Albumentations(p=hyp.albumentations),
+        Albumentations(p=hyp.albumentations, obj_size=hyp.obj_size_alb),
         RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
         RandomFlip(direction='vertical', p=hyp.flipud),
         RandomFlip(direction='horizontal', p=hyp.fliplr, flip_idx=flip_idx)])  # transforms

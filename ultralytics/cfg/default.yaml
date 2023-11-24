@@ -107,6 +107,7 @@ p_scale: 0.2 # (float) image scale probability
 shear: 0.0  # (float) image shear (+/- deg)
 perspective: 0.0  # (float) image perspective (+/- fraction), range 0-0.001
 obj_size: 0.05 # (float) minimum object size for random perspective augmentation
+obj_size_alb: 0.01 #(float) minimum object size for albumentations
 tear: 0.2 # (float) probability of tear augmentation
 background_intensity: 0.7 # (float) augmentation intensity range 0-1
 instance_similarity: 0.7 # (float) threshold for removing excess tear range 0-1
