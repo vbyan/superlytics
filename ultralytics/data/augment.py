@@ -833,13 +833,13 @@ class Albumentations:
 
             #check_version(A.__version__, '1.0.3', hard=True)  # version requirement
 
-            T = [A.OneOf([A.Blur(p=0.5, blur_limit=(11, 19)),
-                A.MedianBlur(p=0.5, blur_limit=(11, 19)),
-                A.CLAHE(p=0.5),
-                A.RandomBrightnessContrast(p=0.5),
-                A.RandomGamma(p=0.5),
-                A.RandomRain(p=0.5, brightness_coefficient=0.9, blur_value=4),
-                A.MotionBlur(p=1, blur_limit=(11, 19))], p=2*self.p)]
+            T = [A.OneOf([A.OneOf([A.Blur(p=1, blur_limit=(11, 19)),
+                A.MedianBlur(p=1, blur_limit=(11, 19)),
+                A.CLAHE(p=1),
+                A.RandomBrightnessContrast(p=1),
+                A.RandomGamma(p=1)], p=self.p),
+                A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
+                A.MotionBlur(p=self.p, blur_limit=(11, 19))])]
             self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
 
             LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
