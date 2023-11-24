@@ -830,15 +830,19 @@ class Albumentations:
         self.transform = None
         prefix = colorstr('albumentations: ')
 
-        T = [A.OneOf([A.OneOf([A.Blur(p=1, blur_limit=(11, 19)),
+        T_blur = [A.Blur(p=1, blur_limit=(11, 19)),
             A.MedianBlur(p=1, blur_limit=(11, 19)),
             A.CLAHE(p=1),
             A.RandomBrightnessContrast(p=1),
-            A.RandomGamma(p=1)], p=self.p),
-            A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
-            A.MotionBlur(p=self.p, blur_limit=(11, 19))], p=1)]
-        self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
-        LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
+            A.RandomGamma(p=1)]
+
+        T_singles = [A.RandomRain(p=1, brightness_coefficient=0.9, blur_value=4),
+                     A.MotionBlur(p=1, blur_limit=(11, 19))]
+
+        T = [A.OneOf([A.OneOf(T_blur, 1)] + T_singles, p=1)]
+        self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']),p=self.p)
+        LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T_blur + T_singles if x.p))
+
     def __call__(self, labels):
         """Generates object detections and returns a dictionary with detection results."""
         im = labels['img']
