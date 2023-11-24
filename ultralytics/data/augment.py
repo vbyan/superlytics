@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
+import albumentations as A
 
 
 from ultralytics.utils import LOGGER, colorstr
@@ -827,26 +828,15 @@ class Albumentations:
         """Initialize the transform object for YOLO bbox formatted params."""
         self.p = p
         self.transform = None
-        prefix = colorstr('albumentations: ')
-        try:
-            import albumentations as A
 
-            #check_version(A.__version__, '1.0.3', hard=True)  # version requirement
-
-            T = [A.OneOf([A.OneOf([A.Blur(p=1, blur_limit=(11, 19)),
-                A.MedianBlur(p=1, blur_limit=(11, 19)),
-                A.CLAHE(p=1),
-                A.RandomBrightnessContrast(p=1),
-                A.RandomGamma(p=1)], p=self.p),
-                A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
-                A.MotionBlur(p=self.p, blur_limit=(11, 19))], p=1)]
-            self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
-
-            LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
-        except ImportError:  # package not installed, skip
-            pass
-        except Exception as e:
-            LOGGER.info(f'{prefix}{e}')
+        T = [A.OneOf([A.OneOf([A.Blur(p=1, blur_limit=(11, 19)),
+            A.MedianBlur(p=1, blur_limit=(11, 19)),
+            A.CLAHE(p=1),
+            A.RandomBrightnessContrast(p=1),
+            A.RandomGamma(p=1)], p=self.p),
+            A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
+            A.MotionBlur(p=self.p, blur_limit=(11, 19))], p=1)]
+        self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
 
     def __call__(self, labels):
         """Generates object detections and returns a dictionary with detection results."""
