@@ -828,6 +828,7 @@ class Albumentations:
         """Initialize the transform object for YOLO bbox formatted params."""
         self.p = p
         self.transform = None
+        prefix = colorstr('albumentations: ')
 
         T = [A.OneOf([A.OneOf([A.Blur(p=1, blur_limit=(11, 19)),
             A.MedianBlur(p=1, blur_limit=(11, 19)),
@@ -837,7 +838,7 @@ class Albumentations:
             A.RandomRain(p=self.p, brightness_coefficient=0.9, blur_value=4),
             A.MotionBlur(p=self.p, blur_limit=(11, 19))], p=1)]
         self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
-
+        LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
     def __call__(self, labels):
         """Generates object detections and returns a dictionary with detection results."""
         im = labels['img']
